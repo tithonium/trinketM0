@@ -2,4 +2,4 @@
 
 ### To do:
 - [ ] Re-add mouse support
-- [ ] Replace arduino keyboard lib with nicohood keyboard lib
+- [ ] Find better HID lib
