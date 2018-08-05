@@ -1,67 +1,121 @@
 /********* Trinket M0 Keypad *************/
+/* Support for the DotStar LED was hacked
+in pretty lazily so I'll probably end up
+either replacing this code or adapting the
+touchPad code to work for regular keypads
+since it was written mostly from scratch,
+is much cleaner, and uses the new remapper.
+
+I've done my best to clean this up a bit
+and make it more readable, but it would
+take a bad amount of time to make it
+perfect so this is the best I'm willing
+to do for now.
+
+-thnikk */
 
 // M0 specific
-  #include <Arduino.h>
-  #include <FlashAsEEPROM.h>
-  #include <Adafruit_DotStar.h>
+#include <Arduino.h>
+#include <FlashAsEEPROM.h>
+#include <Adafruit_DotStar.h>
 // Universal
-  #include <Bounce2.h>
-  #include <Keyboard.h>
-  #include <Mouse.h>
-  #include <Adafruit_NeoPixel.h>
+#include <Bounce2.h>
+#include <Keyboard.h>
+#include <Mouse.h>
+#include <Adafruit_NeoPixel.h>
 // RGB LED initialization
-  #define DATAPIN    7
-  #define CLOCKPIN   8
-  Adafruit_DotStar dotStar = Adafruit_DotStar( 1, DATAPIN, CLOCKPIN, DOTSTAR_BRG);
-  Adafruit_NeoPixel pixels = Adafruit_NeoPixel(numkeys, 1, NEO_GRB + NEO_KHZ800);
+#define DATAPIN    7
+#define CLOCKPIN   8
+Adafruit_DotStar dotStar = Adafruit_DotStar( 1, DATAPIN, CLOCKPIN, DOTSTAR_BRG);
+Adafruit_NeoPixel pixels = Adafruit_NeoPixel(numkeys, 1, NEO_GRB + NEO_KHZ800);
 // Trinket button pins
-  const byte pins[] = { 0, 2, 3, 4, 19 };
-  char initMapping[] = {"zxcv"};
+const byte pins[] = { 0, 2, 3, 4, 19 };
+char initMapping[] = {"zxcv"};
 // Cycle LED Mode
-  unsigned long cycleMillis;
-  unsigned long cycleSpeed = 10;
-  byte cycleWheel;
+unsigned long cycleMillis;
+unsigned long cycleSpeed = 10;
+byte cycleWheel;
 // Reactive LED mode
-  byte colorState[numkeys+1];             // States between white, rainbow, fadeout, and off (per key)
-  byte reactiveWheel[numkeys+1];          // Reactive wheel counter
-  unsigned long reactSpeed = 0;
-  unsigned long reactMillis = 0;
+byte colorState[numkeys+1];             // States between white, rainbow, fadeout, and off (per key)
+byte reactiveWheel[numkeys+1];          // Reactive wheel counter
+unsigned long reactSpeed = 0;
+unsigned long reactMillis = 0;
 // Custom LED mode
-  byte customWheel[numkeys];
-  unsigned long customMillis = 0;
-  unsigned long customSpeed = 5;
+byte customWheel[numkeys];
+unsigned long customMillis = 0;
+unsigned long customSpeed = 5;
 // BPS LED mode
-  unsigned long bpsMillis = 0;
-  unsigned long bpsMillis2 = 0;
-  unsigned long bpsSpeed = 0;
-  unsigned long bpsUpdate = 1000;
-  byte bpsCount = 0;
-  byte bpsBuffer = 170;
-  byte bpsFix = 170;
-  bool bpsPress[numkeys-1];
+unsigned long bpsMillis = 0;
+unsigned long bpsMillis2 = 0;
+unsigned long bpsSpeed = 0;
+unsigned long bpsUpdate = 1000;
+byte bpsCount = 0;
+byte bpsBuffer = 170;
+byte bpsFix = 170;
+bool bpsPress[numkeys-1];
 // Color change LED mode
-  bool pressedCC[numkeys]; // New pressed array for colorChange
-  byte changeColors[numkeys]; // Array for storing colors; auto rollover since it's a byte
-  byte changeVal = 17; // Amount to increment color on keypress
-  unsigned long changeMillis; // For millis timer
+bool pressedCC[numkeys]; // New pressed array for colorChange
+byte changeColors[numkeys]; // Array for storing colors; auto rollover since it's a byte
+byte changeVal = 17; // Amount to increment color on keypress
+unsigned long changeMillis; // For millis timer
 // Universal LED
-  byte ledMode = 0;
-  byte b = 127;  // Brightness
-  byte rgb[numkeys][3];
-  byte dsrgb[3];
-  byte numModes = 6;
+byte ledMode = 0;
+byte b = 127;  // Brightness
+byte rgb[numkeys][3];
+byte dsrgb[3];
+byte numModes = 6;
 // Side button
-  unsigned long s = 500;
-  unsigned long m = 1500;
-  unsigned long sideMillis = 0;
-  unsigned long brightMillis = 0;
-  byte hold = 0;
-  byte blink = 0;
+unsigned long s = 500;
+unsigned long m = 1500;
+unsigned long sideMillis = 0;
+unsigned long brightMillis = 0;
+byte hold = 0;
+byte blink = 0;
 // Universal
-  Bounce * bounce = new Bounce[5];
-  bool version = 0;
-  char mapping[numkeys][3];
+Bounce * bounce = new Bounce[5];
+bool version = 0;
+char mapping[numkeys][3];
 
+// Remap code
+byte specialLength = 31; // Number of "special keys"
+String specialKeys[] = {
+  "shift", "ctrl", "super",
+  "alt", "f1", "f2", "f3",
+  "f4", "f5", "f6", "f7",
+  "f8", "f9", "f10", "f11",
+  "f12", "insert",
+  "delete", "backspace",
+  "enter", "home", "end",
+  "pgup", "pgdn", "up",
+  "down", "left", "right",
+  "tab", "escape", "altGr"
+};
+byte specialByte[] = {
+  129, 128, 131, 130,
+  194, 195, 196, 197,
+  198, 199, 200, 201,
+  202, 203, 204, 205,
+  209, 212, 178, 176,
+  210, 213, 211, 214,
+  218, 217, 216, 215,
+  179, 177, 134
+};
+
+byte inputBuffer; // Stores specialByte after conversion
+
+unsigned long previousMillis;
+bool set=0;
+byte dsCycle;
+bool dsPress;
+
+
+/*
+███████ ███████ ████████ ██    ██ ██████
+██      ██         ██    ██    ██ ██   ██
+███████ █████      ██    ██    ██ ██████
+     ██ ██         ██    ██    ██ ██
+███████ ███████    ██     ██████  ██
+*/
 
 void setup() {
 	Serial.begin(9600);
@@ -75,35 +129,69 @@ void setup() {
 
 	dotStar.begin(); // Initialize pins for output
 	dotStar.show();  // Turn all LEDs off ASAP
-
 	pixels.begin();
-	loadEEPROM();
+
+  // Initialize EEPROM
+  if (EEPROM.read(0) != version) {
+    EEPROM.write(0, version); EEPROM.write(20, ledMode); EEPROM.write(21, b);// Start brightness at half
+    for (int x = 0; x < numkeys; x++) { // default custom RGB values
+      EEPROM.write(30+x,50*x);
+      for (int  y= 0; y < 3; y++) {	if (y == 0) EEPROM.write(40+(x*3)+y, int(initMapping[x])); if (y > 0) EEPROM.write(40+(x*3)+y, 0); }
+    }	EEPROM.commit();
+  }
+  // Load values from EEPROM
+  for (int x = 0; x < numkeys; x++) {	for (int  y= 0; y < 3; y++) mapping[x][y] = char(EEPROM.read(40+(x*3)+y)); customWheel[x] = EEPROM.read(30+x); }
+  ledMode = EEPROM.read(20); b = EEPROM.read(21);
 
 }
 
-void loadEEPROM() {
-	// Initialize EEPROM
-	if (EEPROM.read(0) != version) {
-		EEPROM.write(0, version);
-		EEPROM.write(20, ledMode);
-		EEPROM.write(21, b);// Start brightness at half
-		for (int x = 0; x < numkeys; x++) { // default custom RGB values
-			EEPROM.write(30+x,50*x);
-				for (int  y= 0; y < 3; y++) {
-				if (y == 0) EEPROM.write(40+(x*3)+y, int(initMapping[x]));
-				if (y > 0) EEPROM.write(40+(x*3)+y, 0);
-		  	}
-		}
-		EEPROM.commit();
-	}
-	// Load values from EEPROM
-	for (int x = 0; x < numkeys; x++) {
-		for (int  y= 0; y < 3; y++) mapping[x][y] = char(EEPROM.read(40+(x*3)+y));
-		customWheel[x] = EEPROM.read(30+x);
-	}
-  ledMode = EEPROM.read(20);
-  b = EEPROM.read(21);
+/*
+██       ██████   ██████  ██████
+██      ██    ██ ██    ██ ██   ██
+██      ██    ██ ██    ██ ██████
+██      ██    ██ ██    ██ ██
+███████  ██████   ██████  ██
+*/
+
+void loop() {
+
+  if ((millis() - previousMillis) > 1000) { // Check once a second to reduce overhead
+    if (Serial && set == 0) { // Run once when serial monitor is opened to avoid flooding the serial monitor
+      Serial.println("Please press 0 to enter the serial remapper.");
+      set = 1;
+    }
+    // If 0 is received at any point, enter the remapper.
+    if (Serial.available() > 0) if (Serial.read() == '0') remapSerial();
+    // If the serial monitor is closed, reset so it can prompt the user to press 0 again.
+    if (!Serial) set = 0;
+    previousMillis = millis();
+  }
+
+  // Refresh bounce values
+  for(byte x=0; x<=4; x++) bounce[x].update();
+
+  sideButton();
+
+  switch(ledMode){
+    case 0: cycle(); break;
+    case 1: reactive(0); break;
+    case 2: reactive2(); break;
+    case 3: custom(); break;
+    case 4: BPS(); break;
+    case 5: colorChange(); break;
+  }
+
+  keyboard();
+
 }
+
+/*
+██      ███████ ██████      ███    ███  ██████  ██████  ███████ ███████
+██      ██      ██   ██     ████  ████ ██    ██ ██   ██ ██      ██
+██      █████   ██   ██     ██ ████ ██ ██    ██ ██   ██ █████   ███████
+██      ██      ██   ██     ██  ██  ██ ██    ██ ██   ██ ██           ██
+███████ ███████ ██████      ██      ██  ██████  ██████  ███████ ███████
+*/
 
 void wheel(byte shortColor, byte key) { // Set RGB color with byte
   if (shortColor >= 0 && shortColor < 85) { rgb[key][0] = (shortColor * -3) +255; rgb[key][1] = shortColor * 3; rgb[key][2] = 0; }
@@ -135,7 +223,7 @@ void dsSetWhite(byte color) {
 }
 
 void blinkLEDs(byte times) {
-  for (int y = 0; y < 2; y++) {
+  for (int y = 0; y < times; y++) {
     for (int x = 0; x < numkeys; x++) setWhite(0, x);
     delay(20);
     for (int x = 0; x < numkeys; x++) setWhite(255, x);
@@ -155,8 +243,6 @@ void cycle() {
     cycleMillis = millis();
   }
 }
-
-bool dsPress;
 
 void reactive(byte flip) {
   if ((millis() - reactMillis) > reactSpeed) {
@@ -335,26 +421,20 @@ void colorChange(){
 
 }
 
+/*
+██   ██ ███████ ██    ██ ██████   ██████   █████  ██████  ██████
+██  ██  ██       ██  ██  ██   ██ ██    ██ ██   ██ ██   ██ ██   ██
+█████   █████     ████   ██████  ██    ██ ███████ ██████  ██   ██
+██  ██  ██         ██    ██   ██ ██    ██ ██   ██ ██   ██ ██   ██
+██   ██ ███████    ██    ██████   ██████  ██   ██ ██   ██ ██████
+*/
+
+bool pressedLock[numkeys];
 void keyboard(){
 
-  for (int a = 0; a < numkeys; a++) {
-    // Cycles through key and modifiers set
-    for (int b = 0; b < 3; b++) if (!bounce[a].read() && hold != 3) {
-      if (mapping[a][b] > 3) Keyboard.press(mapping[a][b]);
-      else {
-        if (mapping[a][b] == 1) Mouse.press(MOUSE_LEFT);
-        else if (mapping[a][b] == 2) Mouse.press(MOUSE_RIGHT);
-        else if (mapping[a][b] == 3) Mouse.press(MOUSE_MIDDLE);
-      }
-    }
-    for (int b = 2; b >= 0; b--) if (bounce[a].read()) {
-      if (mapping[a][b] > 3) Keyboard.release(mapping[a][b]);
-      else {
-        if (mapping[a][b] == 1) Mouse.release(MOUSE_LEFT);
-        else if (mapping[a][b] == 2) Mouse.release(MOUSE_RIGHT);
-        else if (mapping[a][b] == 3) Mouse.release(MOUSE_MIDDLE);
-      }
-    }
+  for (byte x=0; x<numkeys; x++){
+    if (!bounce[x].read() && pressedLock[x]) { for (byte y=0; y<3; y++) { Keyboard.press(mapping[x][y]); } pressedLock[x] = 0; }
+    if (bounce[x].read() && !pressedLock[x]){ for (byte y=0; y<3; y++) { Keyboard.release(mapping[x][y]); } pressedLock[x] = 1; }
   }
 
 }
@@ -395,34 +475,13 @@ void sideButton(){
 
 }
 
-// Remap code
-byte specialLength = 34; // Number of "special keys"
-String specialKeys[] = {
-  "shift", "ctrl", "super",
-  "alt", "f1", "f2", "f3",
-  "f4", "f5", "f6", "f7",
-  "f8", "f9", "f10", "f11",
-  "f12", "insert",
-  "delete", "backspace",
-  "enter", "home", "end",
-  "pgup", "pgdn", "up",
-  "down", "left", "right",
-  "tab", "escape", "MB1",
-  "MB2", "MB3", "altGr"
-};
-byte specialByte[] = {
-  129, 128, 131, 130,
-  194, 195, 196, 197,
-  198, 199, 200, 201,
-  202, 203, 204, 205,
-  209, 212, 178, 176,
-  210, 213, 211, 214,
-  218, 217, 216, 215,
-  179, 177, 1, 2, 3,
-  134
-};
-
-byte inputBuffer; // Stores specialByte after conversion
+/*
+██████  ███████ ███    ███  █████  ██████  ██████  ███████ ██████
+██   ██ ██      ████  ████ ██   ██ ██   ██ ██   ██ ██      ██   ██
+██████  █████   ██ ████ ██ ███████ ██████  ██████  █████   ██████
+██   ██ ██      ██  ██  ██ ██   ██ ██      ██      ██      ██   ██
+██   ██ ███████ ██      ██ ██   ██ ██      ██      ███████ ██   ██
+*/
 
 byte inputInterpreter(String input) { // Checks inputs for a preceding colon and converts said input to byte
   if (input[0] == ':') { // Check if user input special characters
@@ -594,57 +653,3 @@ void remapSerial() {
   Serial.println("Mapping saved, exiting. To re-enter the remapper, please enter 0.");
 
 } // Remapper loop
-
-unsigned long previousMillis;
-bool set=0;
-byte dsCycle;
-
-void loop() {
-
-  if ((millis() - previousMillis) > 1000) { // Check once a second to reduce overhead
-    if (Serial && set == 0) { // Run once when serial monitor is opened to avoid flooding the serial monitor
-      Serial.println("Please press 0 to enter the serial remapper.");
-      set = 1;
-    }
-    // If 0 is received at any point, enter the remapper.
-    if (Serial.available() > 0) if (Serial.read() == '0') remapSerial();
-    // If the serial monitor is closed, reset so it can prompt the user to press 0 again.
-    if (!Serial) set = 0;
-    previousMillis = millis();
-  }
-
-  /*
-  Serial.write(27);       // ESC command
-  Serial.print("[2J");    // clear screen command
-  Serial.write(27);
-  Serial.print("[H");     // cursor to home command
-  Serial.print("Color state: ");
-  for (byte g = 0; g <= numkeys; g++ ){
-    Serial.print(colorState[g]);
-    if (g < numkeys) Serial.print(", ");
-    if (g == numkeys) Serial.println();
-  }
-  Serial.print("DotStar values: ");
-  for (byte h=0;h<3;h++){
-  Serial.print(dsrgb[h]);
-  if (h != 2) Serial.print(", ");
-  else Serial.println();}
-  */
-
-  // Refresh bounce values
-  for(byte x=0; x<=4; x++) bounce[x].update();
-
-  sideButton();
-
-  switch(ledMode){
-    case 0: cycle(); break;
-    case 1: reactive(0); break;
-    case 2: reactive2(); break;
-    case 3: custom(); break;
-    case 4: BPS(); break;
-    case 5: colorChange(); break;
-  }
-
-  keyboard();
-
-}
