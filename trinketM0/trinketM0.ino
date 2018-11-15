@@ -21,13 +21,17 @@ to do for now.
 // Universal
 #include <Bounce2.h>
 #include <Keyboard.h>
-#include <Mouse.h>
+//#include <Mouse.h>
 #include <Adafruit_NeoPixel.h>
 // RGB LED initialization
 #define DATAPIN    7
 #define CLOCKPIN   8
 Adafruit_DotStar dotStar = Adafruit_DotStar( 1, DATAPIN, CLOCKPIN, DOTSTAR_BRG);
-Adafruit_NeoPixel pixels = Adafruit_NeoPixel(numkeys, 1, NEO_GRB + NEO_KHZ800);
+#if defined rgbw
+  Adafruit_NeoPixel pixels = Adafruit_NeoPixel(numkeys, 1, NEO_GRBW + NEO_KHZ800);
+#else
+  Adafruit_NeoPixel pixels = Adafruit_NeoPixel(numkeys, 1, NEO_GRB + NEO_KHZ800);
+#endif
 // Trinket button pins
 const byte pins[] = { 0, 2, 3, 4, 19 };
 char initMapping[] = {"zxcv"};
