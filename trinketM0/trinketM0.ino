@@ -67,7 +67,7 @@ byte ledMode = 0;
 byte b = 127;  // Brightness
 byte rgb[numkeys][3];
 byte dsrgb[3];
-byte numModes = 6;
+byte numModes = 7;
 // Side button
 unsigned long s = 500;
 unsigned long m = 1500;
@@ -183,6 +183,7 @@ void loop() {
     case 3: custom(); break;
     case 4: BPS(); break;
     case 5: colorChange(); break;
+    case 6: LEDoff(); break;
   }
 
   keyboard();
@@ -423,6 +424,10 @@ void colorChange(){
     changeMillis = millis();
   }
 
+}
+
+void LEDoff(){ // Optimize this in the future
+  for (byte x=0;x<numkeys;x++) setWhite(0, x);
 }
 
 /*
