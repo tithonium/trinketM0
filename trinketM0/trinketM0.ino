@@ -16,6 +16,9 @@ to do for now.
 
 // M0 specific
 #include <Arduino.h>
+#ifdef TOUCH
+#include "Adafruit_FreeTouch.h"
+#endif
 #include <FlashAsEEPROM.h>
 #include <Adafruit_DotStar.h>
 // Universal
@@ -33,7 +36,11 @@ Adafruit_DotStar dotStar = Adafruit_DotStar( 1, DATAPIN, CLOCKPIN, DOTSTAR_BRG);
   Adafruit_NeoPixel pixels = Adafruit_NeoPixel(numkeys, 1, NEO_GRB + NEO_KHZ800);
 #endif
 // Trinket button pins
+#ifdef TOUCH
+const byte pins[] = { 0, 2, 20, 19 };
+#else
 const byte pins[] = { 0, 2, 3, 4, 19 };
+#endif
 char initMapping[] = {"zxcv"};
 // Cycle LED Mode
 unsigned long cycleMillis;
@@ -105,6 +112,10 @@ byte specialByte[] = {
   179, 177, 134
 };
 
+#ifdef TOUCH
+Adafruit_FreeTouch qt_1 = Adafruit_FreeTouch(4, OVERSAMPLE_8, RESISTOR_50K, FREQ_MODE_NONE);
+#endif
+
 byte inputBuffer; // Stores specialByte after conversion
 
 unsigned long previousMillis;
@@ -124,12 +135,13 @@ bool dsPress;
 void setup() {
 	Serial.begin(9600);
 
+  #ifdef TOUCH
 	// Set pullups and debounce
-	for (byte x=0; x<=4; x++) {
-  	pinMode(pins[x], INPUT_PULLUP);
-  	bounce[x].attach(pins[x]);
-  	bounce[x].interval(8);
-	}
+	for (byte x=0; x<=numkeys; x++) {	pinMode(pins[x], INPUT_PULLUP);	bounce[x].attach(pins[x]); bounce[x].interval(8); }
+  qt_1.begin();
+  #else
+  for (byte x=0; x<=4; x++) { pinMode(pins[x], INPUT_PULLUP); bounce[x].attach(pins[x]); bounce[x].interval(8); }
+  #endif
 
 	dotStar.begin(); // Initialize pins for output
 	dotStar.show();  // Turn all LEDs off ASAP
@@ -157,6 +169,11 @@ void setup() {
 ███████  ██████   ██████  ██
 */
 
+#ifdef TOUCH
+bool pressed;
+int threshold = 400;
+int qt;
+#endif
 void loop() {
 
   if ((millis() - previousMillis) > 1000) { // Check once a second to reduce overhead
@@ -174,6 +191,10 @@ void loop() {
   // Refresh bounce values
   for(byte x=0; x<=4; x++) bounce[x].update();
 
+  #ifdef TOUCH
+  qt = qt_1.measure();
+  if (qt > threshold) pressed = 0;  else if (qt < threshold-50 ) pressed = 1;
+  #endif
   sideButton();
 
   switch(ledMode){
@@ -450,13 +471,21 @@ void keyboard(){
 
 void sideButton(){
   // Press action: Sets hold value depending on how long the side button is held
+  #ifdef TOUCH
+  if (!pressed) {
+  #else
   if (!bounce[4].read()) {
+  #endif
     if ((millis() - sideMillis) > 8 && (millis() - sideMillis) < s)  hold = 1;
     if ((millis() - sideMillis) > s && (millis() - sideMillis) < m)  hold = 2;
     if ((millis() - sideMillis) > m) hold = 3;
   }
   // Release action
+  #ifdef TOUCH
+  if (pressed) {
+  #else
   if (bounce[4].read()) {
+  #endif
     // Press and release escape
     if (hold == 1) { Keyboard.press(KEY_ESC); delay(12); Keyboard.release(KEY_ESC); }
     // Change LED mode
