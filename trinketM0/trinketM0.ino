@@ -89,7 +89,7 @@ bool version = 0;
 char mapping[numkeys][3];
 
 // Remap code
-byte specialLength = 34; // Number of "special keys"
+byte specialLength = 31; // Number of "special keys"
 String specialKeys[] = {
   "shift", "ctrl", "super",
   "alt", "f1", "f2", "f3",
@@ -100,8 +100,7 @@ String specialKeys[] = {
   "enter", "home", "end",
   "pgup", "pgdn", "up",
   "down", "left", "right",
-  "tab", "escape", "altGr",
-  "MB1", "MB2", "MB3"
+  "tab", "escape", "altGr"
 };
 byte specialByte[] = {
   129, 128, 131, 130,
@@ -111,8 +110,7 @@ byte specialByte[] = {
   209, 212, 178, 176,
   210, 213, 211, 214,
   218, 217, 216, 215,
-  179, 177, 134,
-  1, 2, 3
+  179, 177, 134
 };
 
 #ifdef TOUCH
@@ -491,20 +489,10 @@ void keyboard(){
     if (!bounce[x].read() && pressedLock[x] && hold != 3) {
 	 for (byte y=0; y<3; y++) {
 	 	if (mapping[x][y] > 3) Keyboard.press(mapping[x][y]);
-      		else {
-      			if (mapping[x][y] == 1) Mouse.press(MOUSE_LEFT);
-        		else if (mapping[x][y] == 2) Mouse.press(MOUSE_RIGHT);
-        		else if (mapping[x][y] == 3) Mouse.press(MOUSE_MIDDLE);
-      		}
 	} pressedLock[x] = 0; }
     if (bounce[x].read() && !pressedLock[x]){
 	for (byte y=0; y<3; y++) {
 		if (mapping[x][y] > 3) Keyboard.release(mapping[x][y]);
-      		else {
-      			if (mapping[x][y] == 1) Mouse.release(MOUSE_LEFT);
-        		else if (mapping[x][y] == 2) Mouse.release(MOUSE_RIGHT);
-        		else if (mapping[x][y] == 3) Mouse.release(MOUSE_MIDDLE);
-      		}
 	} pressedLock[x] = 1; }
   }
 
