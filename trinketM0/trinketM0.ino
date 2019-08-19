@@ -25,6 +25,7 @@ to do for now.
 #include <Bounce2.h>
 #include <Keyboard.h>
 //#include <Mouse.h>
+#include <Mouse.h>
 #include <Adafruit_NeoPixel.h>
 // RGB LED initialization
 #define DATAPIN    7
@@ -122,6 +123,7 @@ unsigned long previousMillis;
 bool set=0;
 byte dsCycle;
 bool dsPress;
+bool sbToggle = 1;
 
 
 /*
@@ -153,11 +155,28 @@ void setup() {
     for (int x = 0; x < numkeys; x++) { // default custom RGB values
       EEPROM.write(30+x,50*x);
       for (int  y= 0; y < 3; y++) {	if (y == 0) EEPROM.write(40+(x*3)+y, int(initMapping[x])); if (y > 0) EEPROM.write(40+(x*3)+y, 0); }
-    }	EEPROM.commit();
+    }
+    EEPROM.write(50, sbToggle);
+    EEPROM.commit();
   }
   // Load values from EEPROM
   for (int x = 0; x < numkeys; x++) {	for (int  y= 0; y < 3; y++) mapping[x][y] = char(EEPROM.read(40+(x*3)+y)); customWheel[x] = EEPROM.read(30+x); }
   ledMode = EEPROM.read(20); b = EEPROM.read(21);
+
+  // Load side button toggle value from eeprom and check if button is held to toggle (only done on startup)
+  sbToggle = EEPROM.read(50);
+  bounce[0].update();
+  if (!bounce[0].read()) {
+    if (sbToggle == 0) sbToggle = 1;
+    else sbToggle = 0;
+    for (byte x=0;x<numkeys;x++) pixels.setPixelColor(x, pixels.Color(255, 255, 255));
+    pixels.show();
+    dotStar.setPixelColor(0, pixels.Color(255, 255, 255));
+    dotStar.show();
+    delay(1000);
+    EEPROM.write(50, sbToggle);
+    EEPROM.commit();
+  }
 
 }
 
@@ -174,6 +193,9 @@ bool pressed;
 int threshold = 400;
 int qt;
 #endif
+
+unsigned long sbToggleMillis = 0;
+
 void loop() {
 
   if ((millis() - previousMillis) > 1000) { // Check once a second to reduce overhead
@@ -195,7 +217,8 @@ void loop() {
   qt = qt_1.measure();
   if (qt > threshold) pressed = 0;  else if (qt < threshold-50 ) pressed = 1;
   #endif
-  sideButton();
+  // Only use side button if toggle is enabled.
+  if (sbToggle) sideButton();
 
   switch(ledMode){
     case 0: cycle(); break;
@@ -430,7 +453,7 @@ void colorChange(){
     if (!pressedCC[a]) {
       if (!bounce[a].read()) {
         dscc += changeVal;
-        changeColors[a] = changeColors[a] += changeVal;
+        changeColors[a] = changeColors[a] + changeVal;
         pressedCC[a] = 1;
       }
     }
@@ -463,8 +486,14 @@ bool pressedLock[numkeys];
 void keyboard(){
 
   for (byte x=0; x<numkeys; x++){
-    if (!bounce[x].read() && pressedLock[x]) { for (byte y=0; y<3; y++) { Keyboard.press(mapping[x][y]); } pressedLock[x] = 0; }
-    if (bounce[x].read() && !pressedLock[x]){ for (byte y=0; y<3; y++) { Keyboard.release(mapping[x][y]); } pressedLock[x] = 1; }
+    if (!bounce[x].read() && pressedLock[x] && hold != 3) {
+	 for (byte y=0; y<3; y++) {
+	 	if (mapping[x][y] > 3) Keyboard.press(mapping[x][y]);
+	} pressedLock[x] = 0; }
+    if (bounce[x].read() && !pressedLock[x]){
+	for (byte y=0; y<3; y++) {
+		if (mapping[x][y] > 3) Keyboard.release(mapping[x][y]);
+	} pressedLock[x] = 1; }
   }
 
 }
@@ -545,8 +574,6 @@ byte inputInterpreter(String input) { // Checks inputs for a preceding colon and
 
 void remapSerial() {
   Serial.println("Welcome to the serial remapper!");
-  // Buffer variables (puting these at the root of the relevant scope to reduce memory overhead)
-  byte input = 0;
 
   // Print current EEPROM values
   Serial.print("Current values are: ");
