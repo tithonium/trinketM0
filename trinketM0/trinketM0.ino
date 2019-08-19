@@ -25,7 +25,6 @@ to do for now.
 #include <Bounce2.h>
 #include <Keyboard.h>
 //#include <Mouse.h>
-#include <Mouse.h>
 #include <Adafruit_NeoPixel.h>
 // RGB LED initialization
 #define DATAPIN    7
