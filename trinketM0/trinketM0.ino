@@ -88,7 +88,7 @@ bool version = 0;
 char mapping[numkeys][3];
 
 // Remap code
-byte specialLength = 31; // Number of "special keys"
+byte specialLength = 47; // Number of "special keys"
 String specialKeys[] = {
   "shift", "ctrl", "super",
   "alt", "f1", "f2", "f3",
@@ -99,7 +99,12 @@ String specialKeys[] = {
   "enter", "home", "end",
   "pgup", "pgdn", "up",
   "down", "left", "right",
-  "tab", "escape", "altGr"
+  "tab", "escape", "altGr",
+  "num1", "num2", "num3", "num4",
+  "num5", "num6", "num7",
+  "num8", "num9", "num0",
+  "num/", "num*", "num-",
+  "num+","numEnter","num."
 };
 byte specialByte[] = {
   129, 128, 131, 130,
@@ -109,7 +114,11 @@ byte specialByte[] = {
   209, 212, 178, 176,
   210, 213, 211, 214,
   218, 217, 216, 215,
-  179, 177, 134
+  179, 177, 134, 225,
+  226,227,228,229,
+  230,231,232,233,234,
+  220,221,222,223,224,
+  235
 };
 
 #ifdef TOUCH
@@ -189,7 +198,7 @@ void setup() {
 
 #ifdef TOUCH
 bool pressed;
-int threshold = 400;
+int threshold = 500;
 int qt;
 #endif
 
