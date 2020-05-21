@@ -30,18 +30,14 @@ to do for now.
 #define DATAPIN    7
 #define CLOCKPIN   8
 Adafruit_DotStar dotStar = Adafruit_DotStar( 1, DATAPIN, CLOCKPIN, DOTSTAR_BRG);
-#if defined rgbw
-  Adafruit_NeoPixel pixels = Adafruit_NeoPixel(numkeys, 1, NEO_GRBW + NEO_KHZ800);
+#ifdef CVV
+const byte pins[] = { 12, 11, 10, 9, A0 };
+Adafruit_NeoPixel pixels = Adafruit_NeoPixel(numkeys, 13, NEO_GRB + NEO_KHZ800);
 #else
-  Adafruit_NeoPixel pixels = Adafruit_NeoPixel(numkeys, 1, NEO_GRB + NEO_KHZ800);
+const byte pins[] = { 0, 2, 20, 19, 3 };
+Adafruit_NeoPixel pixels = Adafruit_NeoPixel(numkeys, 1, NEO_GRB + NEO_KHZ800);
 #endif
-// Trinket button pins
-#ifdef TOUCH
-const byte pins[] = { 0, 2, 20, 19 };
-#else
-const byte pins[] = { 0, 2, 3, 4, 19 };
-#endif
-char initMapping[] = {"zxcv"};
+char initMapping[] = {"zxcvb"};
 // Cycle LED Mode
 unsigned long cycleMillis;
 unsigned long cycleSpeed = 10;
@@ -128,7 +124,9 @@ byte specialByte[] = {
   KEY_F24
 };
 
-#ifdef TOUCH
+#ifdef CVV
+Adafruit_FreeTouch qt_1 = Adafruit_FreeTouch(A0, OVERSAMPLE_8, RESISTOR_50K, FREQ_MODE_NONE);
+#else
 Adafruit_FreeTouch qt_1 = Adafruit_FreeTouch(4, OVERSAMPLE_8, RESISTOR_50K, FREQ_MODE_NONE);
 #endif
 
@@ -154,10 +152,10 @@ void setup() {
 
   #ifdef TOUCH
 	// Set pullups and debounce
-	for (byte x=0; x<=numkeys; x++) {	pinMode(pins[x], INPUT_PULLUP);	bounce[x].attach(pins[x]); bounce[x].interval(8); }
+	for (byte x=0; x<numkeys; x++) {	pinMode(pins[x], INPUT_PULLUP);	bounce[x].attach(pins[x]); bounce[x].interval(8); }
   qt_1.begin();
   #else
-  for (byte x=0; x<=4; x++) { pinMode(pins[x], INPUT_PULLUP); bounce[x].attach(pins[x]); bounce[x].interval(8); }
+  for (byte x=0; x<=numkeys; x++) { pinMode(pins[x], INPUT_PULLUP); bounce[x].attach(pins[x]); bounce[x].interval(8); }
   #endif
 
 	dotStar.begin(); // Initialize pins for output
@@ -205,7 +203,7 @@ void setup() {
 
 #ifdef TOUCH
 bool pressed;
-int threshold = 500;
+int threshold = 600;
 int qt;
 #endif
 
@@ -226,7 +224,7 @@ void loop() {
   }
 
   // Refresh bounce values
-  for(byte x=0; x<=4; x++) bounce[x].update();
+  for(byte x=0; x<numkeys; x++) bounce[x].update();
 
   #ifdef TOUCH
   qt = qt_1.measure();
