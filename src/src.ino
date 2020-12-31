@@ -37,7 +37,8 @@ Adafruit_NeoPixel pixels = Adafruit_NeoPixel(numkeys, 13, NEO_GRB + NEO_KHZ800);
 const byte pins[] = { 0, 2, 20, 19, 3 };
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(numkeys, 1, NEO_GRB + NEO_KHZ800);
 #endif
-char initMapping[] = {"zxcvb"};
+#define MAXSTRING 100
+char initMapping[][MAXSTRING] = {"hello", "world"};
 // Cycle LED Mode
 unsigned long cycleMillis;
 unsigned long cycleSpeed = 10;
@@ -80,8 +81,8 @@ byte hold = 0;
 byte blink = 0;
 // Universal
 Bounce * bounce = new Bounce[5];
-bool version = 0;
-char mapping[numkeys][3];
+bool version = 1;
+char mapping[numkeys][MAXSTRING];
 
 // Remap code
 byte specialLength = 59; // Number of "special keys"
@@ -167,17 +168,22 @@ void setup() {
     EEPROM.write(0, version); EEPROM.write(20, ledMode); EEPROM.write(21, b);// Start brightness at half
     for (int x = 0; x < numkeys; x++) { // default custom RGB values
       EEPROM.write(30+x,50*x);
-      for (int  y= 0; y < 3; y++) {	if (y == 0) EEPROM.write(40+(x*3)+y, int(initMapping[x])); if (y > 0) EEPROM.write(40+(x*3)+y, 0); }
+      for (int  y= 0; y < MAXSTRING; y++) {	if (y == 0) EEPROM.write(40+(x*MAXSTRING)+y, int(initMapping[x])); if (y > 0) EEPROM.write(40+(x*MAXSTRING)+y, 0); }
     }
-    EEPROM.write(50, sbToggle);
+    EEPROM.write(22, sbToggle);
     EEPROM.commit();
   }
   // Load values from EEPROM
-  for (int x = 0; x < numkeys; x++) {	for (int  y= 0; y < 3; y++) mapping[x][y] = char(EEPROM.read(40+(x*3)+y)); customWheel[x] = EEPROM.read(30+x); }
-  ledMode = EEPROM.read(20); b = EEPROM.read(21);
+  for (int x = 0; x < numkeys; x++) {
+    for (int  y= 0; y < MAXSTRING; y++)
+      mapping[x][y] = char(EEPROM.read(40+(x*MAXSTRING)+y));
+    customWheel[x] = EEPROM.read(30+x);
+  }
+  ledMode = EEPROM.read(20);
+  b = EEPROM.read(21);
 
   // Load side button toggle value from eeprom and check if button is held to toggle (only done on startup)
-  sbToggle = EEPROM.read(50);
+  sbToggle = EEPROM.read(22);
   bounce[0].update();
   if (!bounce[0].read()) {
     if (sbToggle == 0) sbToggle = 1;
@@ -187,7 +193,7 @@ void setup() {
     dotStar.setPixelColor(0, pixels.Color(255, 255, 255));
     dotStar.show();
     delay(1000);
-    EEPROM.write(50, sbToggle);
+    EEPROM.write(22, sbToggle);
     EEPROM.commit();
   }
 
@@ -214,6 +220,14 @@ void loop() {
   if ((millis() - previousMillis) > 1000) { // Check once a second to reduce overhead
     if (Serial && set == 0) { // Run once when serial monitor is opened to avoid flooding the serial monitor
       Serial.println("Please press 0 to enter the serial remapper.");
+      Serial.print("initMapping[0]=");
+      Serial.println(initMapping[0]);
+      Serial.print("initMapping[1]=");
+      Serial.println(initMapping[1]);
+      Serial.print("mapping[0]=");
+      Serial.println(mapping[0]);
+      Serial.print("mapping[1]=");
+      Serial.println(mapping[1]);
       set = 1;
     }
     // If 0 is received at any point, enter the remapper.
@@ -500,13 +514,28 @@ void keyboard(){
 
   for (byte x=0; x<numkeys; x++){
     if (!bounce[x].read() && pressedLock[x] && hold != 3) {
-	 for (byte y=0; y<3; y++) {
-	 	if (mapping[x][y] > 3) Keyboard.press(mapping[x][y]);
-	} pressedLock[x] = 0; }
+      // for (byte y = 0; y < MAXSTRING; y++)
+      // {
+      //   if (mapping[x][y] == 0)
+      //     break;
+      //   if (mapping[x][y] > 3)
+      //     Keyboard.press(mapping[x][y]);
+      // }
+      pressedLock[x] = 0;
+    }
     if (bounce[x].read() && !pressedLock[x]){
-	for (byte y=0; y<3; y++) {
-		if (mapping[x][y] > 3) Keyboard.release(mapping[x][y]);
-	} pressedLock[x] = 1; }
+      for (byte y = 0; y < MAXSTRING; y++)
+      {
+        if (mapping[x][y] == 0)
+          break;
+        if (mapping[x][y] > 3) {
+          Keyboard.press(mapping[x][y]);
+          delay(12);
+          Keyboard.release(mapping[x][y]);
+        }
+      }
+      pressedLock[x] = 1;
+    }
   }
 
 }
@@ -577,7 +606,8 @@ byte inputInterpreter(String input) { // Checks inputs for a preceding colon and
     Serial.println("Invalid code added, please try again.");
     return 2;
   }
-  else if (input[0] != ':' && input.length() > 3){
+  else if (input[0] != ':' && input.length() > MAXSTRING)
+  {
     Serial.println();
     Serial.println("Invalid, please try again.");
     return 2;
@@ -587,11 +617,16 @@ byte inputInterpreter(String input) { // Checks inputs for a preceding colon and
 
 void remapSerial() {
   Serial.println("Welcome to the serial remapper!");
+  Serial.print("mapping[0]=");
+  Serial.println(mapping[0]);
+  Serial.print("mapping[1]=");
+  Serial.println(mapping[1]);
 
   // Print current EEPROM values
   Serial.print("Current values are: ");
   for (int x = 0; x < numkeys; x++) {
-    for (int y = 0; y < 3; y++) {
+    for (int y = 0; y < MAXSTRING; y++)
+    {
       byte mapCheck = int(mapping[x][y]);
       if (mapCheck != 0){ // If not null...
         // Print if regular character (prints as a char)
@@ -656,7 +691,11 @@ void remapSerial() {
     byte y = 0; // External loop counter for while loop
     byte z = 0; // quickfix for bug causing wrong input slots to be saved
     while (true) {
-      while(!Serial.available()){}
+      Serial.print("Starting loop, y=");
+      Serial.println(y);
+      while (!Serial.available())
+      {
+      }
       String serialInput = Serial.readString();
       byte loopV = inputInterpreter(serialInput);
 
@@ -664,9 +703,10 @@ void remapSerial() {
       if (loopV == 0){ // Save to array and EEPROM and quit; do and break
         // If user finishes key
         if (serialInput[0] == 'x' && serialInput[1] == 'x') { // Break if they use the safe word
-          for (y; y < 3; y++) { // Overwrite with null values (0 char = null)
-            EEPROM.write((40+(x*3)+y), 0);
-            mapping[x][y] = 0;
+          for (int yy = y; yy < MAXSTRING; yy++)
+          { // Overwrite with null values (0 char = null)
+            EEPROM.write((40 + (x * MAXSTRING) + yy), 0);
+            mapping[x][yy] = 0;
           }
           if (x < numkeys-1) Serial.print("(finished key,) ");
           if (x == numkeys-1) Serial.print("(finished key)");
@@ -675,16 +715,20 @@ void remapSerial() {
         // If user otherwise finishes inputs
         Serial.print(serialInput); // Print once
         if (x < 5) Serial.print(", ");
-        for (y; y < 3; y++) { // Normal write/finish
-          EEPROM.write((40+(x*3)+y), int(serialInput[y-z]));
-          mapping[x][y] = serialInput[y-z];
+        for (; y < MAXSTRING; y++)
+        { // Normal write/finish
+          if(serialInput[y-z] == 0)
+            break;
+          EEPROM.write((40 + (x * MAXSTRING) + y), int(serialInput[y - z]));
+          mapping[x][y] = serialInput[y - z];
         }
-        break;
-      }
+        if (y >= MAXSTRING)
+          break;
+    }
 
       // If key is converted
       if (loopV == 1){ // save input buffer into slot and take another serial input; y++ and loop
-        EEPROM.write((40+(x*3)+y), inputBuffer);
+        EEPROM.write((40 + (x * MAXSTRING) + y), inputBuffer);
         mapping[x][y] = inputBuffer;
         y++;
         z++;
@@ -693,7 +737,8 @@ void remapSerial() {
       // If user input is invalid, print keys again.
       if (loopV == 2){
         for (int a = 0; a < x; a++) {
-          for (int d = 0; d < 3; d++) {
+          for (int d = 0; d < MAXSTRING; d++)
+          {
             byte mapCheck = int(mapping[a][d]);
             if (mapCheck != 0){ // If not null...
               // Print if regular character (prints as a char)
@@ -729,5 +774,9 @@ void remapSerial() {
   EEPROM.commit();
   Serial.println();
   Serial.println("Mapping saved, exiting. To re-enter the remapper, please enter 0.");
+  Serial.print("mapping[0]=");
+  Serial.println(mapping[0]);
+  Serial.print("mapping[1]=");
+  Serial.println(mapping[1]);
 
 } // Remapper loop
